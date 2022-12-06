@@ -445,22 +445,6 @@ void QQuickWindow::physicalDpiChanged()
     d->devicePixelRatio = newPixelRatio;
     if (d->contentItem)
         updatePixelRatioHelper(d->contentItem, newPixelRatio);
-}
-
-void QQuickWindow::handleScreenChanged(QScreen *screen)
-{
-    Q_D(QQuickWindow);
-    // we connected to the initial screen in QQuickWindowPrivate::init, but the screen changed
-    disconnect(d->physicalDpiChangedConnection);
-    if (screen) {
-        physicalDpiChanged();
-        // When physical DPI changes on the same screen, either the resolution or the device pixel
-        // ratio changed. We must check what it is. Device pixel ratio does not have its own
-        // ...Changed() signal. Reconnect, same as in QQuickWindowPrivate::init.
-        d->physicalDpiChangedConnection = connect(screen, &QScreen::physicalDotsPerInchChanged,
-                                                  this, &QQuickWindow::physicalDpiChanged);
-    }
-
     d->forcePolish();
 }
 
@@ -473,6 +457,12 @@ void forcePolishHelper(QQuickItem *item)
     QList <QQuickItem *> items = item->childItems();
     for (int i=0; i<items.size(); ++i)
         forcePolishHelper(items.at(i));
+}
+
+void QQuickWindow::handleScreenChanged(QScreen *screen)
+{
+    Q_D(QQuickWindow);
+    d->forcePolish();
 }
 
 /*!
@@ -710,10 +700,6 @@ void QQuickWindowPrivate::init(QQuickWindow *c, QQuickRenderControl *control)
 
     if (QScreen *screen = q->screen()) {
         devicePixelRatio = screen->devicePixelRatio();
-        // if the screen changes, then QQuickWindow::handleScreenChanged disconnects
-        // and connects to the new screen
-        physicalDpiChangedConnection = QObject::connect(screen, &QScreen::physicalDotsPerInchChanged,
-                                                        q, &QQuickWindow::physicalDpiChanged);
     }
 
     QSGContext *sg;
@@ -1895,6 +1881,8 @@ bool QQuickWindow::event(QEvent *e)
             }
         }
         break;
+    case QEvent::DevicePixelRatioChange:
+        physicalDpiChanged();
     default:
         break;
     }
